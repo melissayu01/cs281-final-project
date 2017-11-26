@@ -8,10 +8,10 @@ train_files = ['20080101']
 test_files = [
     '20080710', '20080725',
     '20080810', '20080825',
-#     '20080910', '20080923',
-#     '20081010', '20081025',
-#     '20081110', '20081125',
-#     '20081210', '20081225',
+    '20080910', '20080923',
+    '20081010', '20081025',
+    '20081110', '20081125',
+    '20081210', '20081225',
 ]
 data_dir = '../data/'
 
@@ -26,8 +26,11 @@ columns = {
 label_enc = [1, -1, -2] # safe, known attack, unknown attack
 num_enc = dict()
 
-def preprocess(files, out_dir, features=None, shuffle=False):
-    print('Processing {}'.format(out_dir))
+def preprocess(files, out_dir, features=None, shuffle=False, remove_dups=False, binary_labels=False):
+    print(
+        'Processing {} with [shuffle {}] [remove_dups {}] [binary_labels {}]'
+        .format(out_dir, shuffle, remove_dups, binary_labels))
+
     n_by_class = pd.Series().astype('int')
     n_batches_written = 0
     df_in_write = pd.DataFrame()
@@ -41,10 +44,8 @@ def preprocess(files, out_dir, features=None, shuffle=False):
         )
 
         df.drop(columns['drop'], axis=1, inplace=True)
-        df.drop_duplicates(inplace=True)
-
-        # for col in columns['count_of_100']:
-        #     df[col] /= 100
+        if remove_dups:
+            df.drop_duplicates(inplace=True)
 
         for col in columns['numerical']:
             if col not in num_enc:
@@ -55,12 +56,12 @@ def preprocess(files, out_dir, features=None, shuffle=False):
 
         df = pd.get_dummies(df, columns=columns['categorical'])
 
-        # df['label'] = [
-        #     int(y < 0) for y in df[columns['label']].values
-        # ]
-        df['label'] = [
-            label_enc.index(y) for y in df[columns['label']].values
-        ]
+        if binary_labels:
+            df['label'] = [int(y < 0) for y in df[columns['label']].values]
+        else:
+            df['label'] = [
+                label_enc.index(y) for y in df[columns['label']].values
+            ]
         df.drop(columns['label'], axis=1, inplace=True)
         n_by_class = n_by_class.add(df['label'].value_counts(), fill_value=0)
 
@@ -74,7 +75,7 @@ def preprocess(files, out_dir, features=None, shuffle=False):
             df_in_write = df_in_write.sample(frac=1)
 
         endchar = '\n' if i == n_files-1 else '\r'
-        print('Writing {} [{:2}/{:2}]'.format(fname, i+1, n_files), end=endchar)
+        print('{} [{:2}/{:2}]'.format(fname, i+1, n_files), end=endchar)
 
         while len(df_in_write) >= batch_size:
             df_in_write.iloc[:batch_size].to_csv(
@@ -114,6 +115,6 @@ def preprocess(files, out_dir, features=None, shuffle=False):
 
     return features
 
-train_features = preprocess(train_files, out_dir='train/')
+train_features = preprocess(train_files, out_dir='train/', remove_dups=True)
 _ = preprocess(test_files, out_dir='test/', features=train_features)
 

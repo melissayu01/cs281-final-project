@@ -125,8 +125,11 @@ def train(epoch, model, data_loader, args):
 
 def test(epoch, model, data_loader, args):
     model.eval()
+
+    n_batches = len(data_loader)
     test_loss = 0
-    cm = np.zeros((model.y_dim, model.y_dim))
+    cm = np.zeros((2, 2))
+    pred_y, true_y = [], []
 
     print('Testing...', end='\r')
     for batch_idx, (X, y) in enumerate(data_loader):
@@ -136,13 +139,40 @@ def test(epoch, model, data_loader, args):
 
         probs = model.Qy(X)
         _, preds = probs.max(dim=1)
-        test_loss += (preds != y).sum().data[0]
-        cm += confusion_matrix(y.data.numpy(), preds.data.numpy(),
-                               labels=range(model.y_dim))
 
-    print(test_loss)
+        # convert to binary classes (combine known/unknown attacks)
+        bin_probs = probs.data.numpy()[:, 1] + probs.data.numpy()[:, 2]
+        bin_preds = (bin_probs > 0.5).astype('int')
+        bin_y = (y >= 1).int().data.numpy()
+
+        if np.random.random() < 0.5:
+            pred_y.append(bin_preds)
+            true_y.append(bin_y)
+        test_loss += (bin_preds != bin_y).sum()
+
+        cm += confusion_matrix(bin_y, bin_preds, labels=range(2))
+
+        # logging
+        if batch_idx % 10 == 0 or batch_idx == n_batches-1:
+            endchar = '\n' if batch_idx == n_batches-1 else '\r'
+            print((
+                'Test Epoch: {:2} [{:6}/{:6} ({:2.0f}%)]\t'
+            ).format(
+                epoch,
+                batch_idx * args.batch_size + len(X),
+                len(data_loader.dataset),
+                100. * batch_idx / len(data_loader)
+            ), end=endchar, flush=True)
+
     test_loss /= len(data_loader.dataset)
-    print('====> Test set loss: {:.4f}'.format(test_loss))
+    model.step_schedulers(test_loss)
+
+    pred_y = np.concatenate(pred_y).ravel()
+    true_y = (np.concatenate(true_y).ravel() >= 1).astype('int')
+    auc = roc_auc_score(true_y, pred_y)
+
+    # print('====> Test set loss: {:.4f}\t'.format(test_loss))
+    print('====> Test set loss: {:.4f}\t AUC: {:.4f}'.format(test_loss, auc))
     print(cm)
 
 def main(**kwargs):
@@ -195,12 +225,17 @@ def main(**kwargs):
     for epoch in range(1, args.epochs + 1):
         train(epoch, model, train_loader, args)
         if epoch % args.test_interval == 0:
-            test(epoch, model, test_loader, args)
+            test (epoch, model, test_loader, args)
 
 if __name__ == '__main__':
-    kwargs = {
-        'z_dim': 15,
-        'h_dim': 300,
-        'lr'   : 1e-4
-    }
-    main(**kwargs)
+    for z_dim in [15]:
+        for h_dim in [300]:
+            for lr in [1e-3]:
+                kwargs = {
+                    'z_dim': z_dim,
+                    'h_dim': h_dim,
+                    'Q_lr' : lr,
+                    'P_lr' : lr,
+                    'D_lr' : lr,
+                }
+                main(**kwargs)
