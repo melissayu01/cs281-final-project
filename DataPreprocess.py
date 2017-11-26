@@ -6,7 +6,6 @@ from scipy.special import expit as sigmoid
 batch_size = 1024 * 128
 train_files = ['20080101']
 test_files = [
-    # '20080110', '20080125',
     '20080710', '20080725',
     '20080810', '20080825',
 #     '20080910', '20080923',
@@ -42,6 +41,7 @@ def preprocess(files, out_dir, features=None, shuffle=False):
         )
 
         df.drop(columns['drop'], axis=1, inplace=True)
+        df.drop_duplicates(inplace=True)
 
         # for col in columns['count_of_100']:
         #     df[col] /= 100
@@ -55,6 +55,9 @@ def preprocess(files, out_dir, features=None, shuffle=False):
 
         df = pd.get_dummies(df, columns=columns['categorical'])
 
+        # df['label'] = [
+        #     int(y < 0) for y in df[columns['label']].values
+        # ]
         df['label'] = [
             label_enc.index(y) for y in df[columns['label']].values
         ]

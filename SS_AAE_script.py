@@ -5,10 +5,13 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 from torch.autograd import Variable
+from sklearn.metrics import confusion_matrix, roc_auc_score
 
 import DataUtils
 from SS_AAE import SS_AAE
 
+np.set_printoptions(precision=4, suppress=True)
+torch.set_printoptions(precision=4)
 
 TINY = 1e-10
 
@@ -50,7 +53,8 @@ def train(epoch, model, data_loader, args):
         recon_loss = F.binary_cross_entropy(X_sample, Xu)
 
         recon_loss.backward()
-        model.recon_solver.step()
+        model.Q_solver.step()
+        model.P_solver.step()
         model.zero_grad()
 
         """ Regularization phase """
@@ -92,7 +96,7 @@ def train(epoch, model, data_loader, args):
         G_loss  = Gz_loss + Gy_loss
 
         G_loss.backward()
-        model.G_solver.step()
+        model.Q_solver.step()
         model.zero_grad()
 
         ### labeled
@@ -102,7 +106,7 @@ def train(epoch, model, data_loader, args):
             class_loss = F.cross_entropy(model.Qy(Xl), yl)
 
             class_loss.backward()
-            model.ss_solver.step()
+            model.Q_solver.step()
             model.zero_grad()
 
         # logging
@@ -122,6 +126,7 @@ def train(epoch, model, data_loader, args):
 def test(epoch, model, data_loader, args):
     model.eval()
     test_loss = 0
+    cm = np.zeros((model.y_dim, model.y_dim))
 
     print('Testing...', end='\r')
     for batch_idx, (X, y) in enumerate(data_loader):
@@ -132,9 +137,13 @@ def test(epoch, model, data_loader, args):
         probs = model.Qy(X)
         _, preds = probs.max(dim=1)
         test_loss += (preds != y).sum().data[0]
+        cm += confusion_matrix(y.data.numpy(), preds.data.numpy(),
+                               labels=range(model.y_dim))
 
+    print(test_loss)
     test_loss /= len(data_loader.dataset)
     print('====> Test set loss: {:.4f}'.format(test_loss))
+    print(cm)
 
 def main(**kwargs):
     # Initialize arguments and torch
@@ -190,11 +199,8 @@ def main(**kwargs):
 
 if __name__ == '__main__':
     kwargs = {
-        'z_dim': 5,
+        'z_dim': 15,
         'h_dim': 300,
-        'recon_lr': 1e-3,
-        'D_lr'    : 1e-4,
-        'G_lr'    : 1e-3,
-        'ss_lr'   : 1e-3
+        'lr'   : 1e-4
     }
     main(**kwargs)
