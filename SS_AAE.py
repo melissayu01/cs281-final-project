@@ -16,11 +16,9 @@ class SS_AAE():
         # Encoder
         self._Q = nn.Sequential(
             nn.Linear(X_dim, h_dim),
+            # nn.Dropout(p=0.3),
             nn.ReLU(),
             nn.BatchNorm1d(h_dim),
-            # nn.Linear(h_dim, h_dim),
-            # nn.ReLU(),
-            # nn.BatchNorm1d(h_dim),
         )
         self.Qz = nn.Sequential(
             self._Q,
@@ -31,57 +29,58 @@ class SS_AAE():
             nn.Linear(h_dim, y_dim),
             nn.Softmax()
         )
-        self.Q_solver = optim.Adam(
-            set(self.Qz.parameters()).union(set(self.Qy.parameters())),
-            lr=Q_lr
-        )
-        self.Q_scheduler = ReduceLROnPlateau(
-            self.Q_solver, 'min', patience=1, verbose=True
-        )
 
         # Decoder
         self.P = nn.Sequential(
             nn.Linear(z_dim + y_dim, h_dim),
+            # nn.Dropout(p=0.3),
             nn.ReLU(),
             nn.BatchNorm1d(h_dim),
-            # nn.Linear(h_dim, h_dim),
-            # nn.ReLU(),
-            # nn.BatchNorm1d(h_dim),
             nn.Linear(h_dim, X_dim),
             nn.Sigmoid(),
-        )
-        self.P_solver = optim.Adam(self.P.parameters(), lr=P_lr)
-        self.P_scheduler = ReduceLROnPlateau(
-            self.P_solver, 'min', patience=1, verbose=True
         )
 
         # Discriminator
         self.Dz = nn.Sequential(
             nn.Linear(z_dim, h_dim),
+            # nn.Dropout(p=0.3),
             nn.ReLU(),
             nn.BatchNorm1d(h_dim),
-            # nn.Linear(h_dim, h_dim),
-            # nn.ReLU(),
-            # nn.BatchNorm1d(h_dim),
             nn.Linear(h_dim, 1),
             nn.Sigmoid(),
         )
         self.Dy = nn.Sequential(
             nn.Linear(y_dim, h_dim),
+            # nn.Dropout(p=0.3),
             nn.ReLU(),
             nn.BatchNorm1d(h_dim),
-            # nn.Linear(h_dim, h_dim),
-            # nn.ReLU(),
-            # nn.BatchNorm1d(h_dim),
             nn.Linear(h_dim, 1),
             nn.Sigmoid(),
+        )
+
+        # optimizers
+        self.Q_solver = optim.Adam(
+            set(self.Qz.parameters()).union(set(self.Qy.parameters())),
+            lr=Q_lr
+        )
+        self.P_solver = optim.Adam(
+            self.P.parameters(),
+            lr=P_lr
         )
         self.D_solver = optim.Adam(
             set(self.Dz.parameters()).union(set(self.Dy.parameters())),
             lr=D_lr
         )
+
+        # schedulers
+        self.Q_scheduler = ReduceLROnPlateau(
+            self.Q_solver, 'min', patience=1, threshold=0.01, verbose=True
+        )
+        self.P_scheduler = ReduceLROnPlateau(
+            self.P_solver, 'min', patience=1, threshold=0.01, verbose=True
+        )
         self.D_scheduler = ReduceLROnPlateau(
-            self.D_solver, 'min', patience=1, verbose=True
+            self.D_solver, 'min', patience=2, threshold=0.01, verbose=True
         )
 
         self.models = (self.Qz, self.Qy, self.P, self.Dz, self.Dy)

@@ -5,8 +5,6 @@ import numpy as np
 from torch.utils.data import Dataset
 
 
-SEED = np.random.randint(0, 10, 1000)
-
 class NIDDataset(Dataset):
     def __init__(self, info_csv_file, root_dir, shuffle, transform=None):
         info = pd.read_csv(info_csv_file, header=None)
@@ -21,6 +19,8 @@ class NIDDataset(Dataset):
         self.root_dir = root_dir
         self.transform = transform
 
+        self.seed = np.random.randint(0, 10, 10000)
+
     def __len__(self):
         return self.n
 
@@ -30,7 +30,7 @@ class NIDDataset(Dataset):
             fname = os.path.join(self.root_dir, str(batch) + '.csv')
             df = pd.read_csv(fname, header=None)
             if self.shuffle:
-                df = df.sample(frac=1, random_state=SEED[batch])
+                df = df.sample(frac=1, random_state=self.seed[batch])
             self.cached_batch = batch
             self.cached_data = df.as_matrix()
 
